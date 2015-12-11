@@ -21,15 +21,15 @@
 */
 
 void initArray(Array *a, size_t initialSize) {
-  a->array = (unsigned long long *)malloc(initialSize * sizeof(unsigned long long));
+  a->array = (uint8_t**)malloc(initialSize * sizeof(uint8_t*));
   a->used = 0;
   a->size = initialSize;
 }
 
-void insertArray(Array *a, unsigned long long element) {
+void insertArray(Array *a, uint8_t *element) {
   if (a->used == a->size) {
     a->size *= 2;
-    a->array = (unsigned long long *)realloc(a->array, a->size * sizeof(unsigned long long));
+    a->array = (uint8_t **)realloc(a->array, a->size * sizeof(uint8_t*));
   }
   a->array[a->used++] = element;
 }
@@ -43,14 +43,27 @@ void freeArray(Array *a) {
 /*
   Check to see if the given Array a contains element. Return true if it does, and false if not
 */
-bool array_contains(Array a, unsigned long long element){
+bool array_contains(Array a, uint8_t *element){
   int i;
   for (i = 0; i < a.used; i++){
-    if (a.array[i] == element){
+    if (equals(a.array[i], element)){
       return true;
     }
   }
   return false;
+}
+
+/*
+* Return true if ethernet address first is equal to ethernet address second. Otherwise return false.
+*/
+bool equals(uint8_t* first, uint8_t* second){
+
+  int i;
+  for (i = 0; i < 6; i++){
+    if (first[i] != second[i]){
+      return false;
+    }
+  return true;
 }
 
 /*
@@ -106,7 +119,7 @@ struct sr_rt rtable_look_up(struct sr_instance *sr, struct sr_arpreq *arp_req){
 /*
   Return the source address of the given ethernet packet
 */
-uint8_t[ETHER_ADDR_LEN] get_ether_source(struct sr_packet *packet){
+uint8_t* get_ether_source(struct sr_packet *packet){
   
   sr_ethernet_hdr_t *ether_hdr = (sr_ethernet_hdr_t *)(packet->buf);
   return ether_hdr->ether_shost;
@@ -125,11 +138,11 @@ void notify_sources_badreq(struct sr_instance *sr, struct sr_arpreq *arp_req){
     initArray(&sources, 1);
     while (packet){
         uint8_t source[ETHER_ADDR_LEN];
-        memcpy(source, get_ether_source(packet), ETHER_ADDR_LEN);
+        memcpy((void *)source, (void *)get_ether_source(packet), ETHER_ADDR_LEN);
         /*Check to make sure we haven't sent to this source yet*/
-        if (!array_contains(sources, *((unsigned long long)source))){
+        if (!array_contains(sources, source)){
           send_host_unreachable(source, packet->buf, sr);
-          insertArray(&sources, *((unsigned long long)source));
+          insertArray(&sources, source));
         }
         free(&source);
         packet = packet->next;

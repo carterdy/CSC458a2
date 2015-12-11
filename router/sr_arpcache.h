@@ -136,7 +136,7 @@ void *sr_arpcache_timeout(void *cache_ptr);
 /*Dynamically sgrowing array from http://stackoverflow.com/questions/3536153/c-dynamically-growing-array
   mainly used for making sure ICMPs are sent to unique hosts and not every packet*/
 typedef struct {
-  uint8_t *array;
+  uint8_t **array;
   size_t used;
   size_t size;
 } Array;
@@ -145,24 +145,30 @@ typedef struct {
 void initArray(Array *a, size_t initialSize);
 
 /* Insert an element to the array and increase the array's size*/
-void insertArray(Array *a, unsigned long long element);
+void insertArray(Array *a, uint8_t* element);
 
 /* Free the array from memory */
 void freeArray(Array *a);
 
-
 /*
   Check to see if the given Array a contains element. Return true if it does, and false if not
 */
-bool array_contains(Array a, unsigned long long element);
+bool array_contains(Array a, uint8_t* element);
+
+/*
+* Return true if ethernet address first is equal to ethernet address second. Otherwise return false.
+*/
+bool equals(uint8_t* first, uint8_t* second);
 
 /*  Other functions we've added */
 
 /*  Extract and return the ip address from the IP header encapsulated by the given ethernet packet.  */
 uint32_t get_ip_addr(uint8_t *packet);
 
-/*  Extract and return the ethernet address from the given ethernet packet.  */
-uint32_t get_ether_addr(struct sr_packet *packet);
+/*
+  Return the source address of the given ethernet packet
+*/
+uint8_t* get_ether_source(struct sr_packet *packet);
 
 /*
   Go through each unique source of the packets waiting on arp_req
