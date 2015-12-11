@@ -325,10 +325,10 @@ int broadcast_arpreq(struct sr_instance *sr, struct sr_arpreq *arp_req){
     struct sr_arp_hdr arp_hdr;
     uint8_t *arp_package;
     uint8_t *e_pack;
-    arp_hdr.ar_hrd = sr_arp_hrd_fmt hfmt = arp_hrd_ethernet;             /* format of hardware address   */
-    arp_hdr.ar_pro = 0X800;            /*from http:/*www.networksorcery.com/enp/protocol/arp.htm#Protocol%20address%20length*/
-    arp_hdr.ar_hln = ETHER_ADDR_LEN = 8; /*from http:/*www.networksorcery.com/enp/protocol/arp.htm#Protocol%20address%20length*/
-    arp_hdr.ar_pln = 8;             /*from http:/*www.networksorcery.com/enp/protocol/arp.htm#Protocol%20address%20length*/
+    arp_hdr.ar_hrd = arp_hrd_ethernet;             /* format of hardware address   */
+    arp_hdr.ar_pro = 0X800;            /*from www.networksorcery.com/enp/protocol/arp.htm#Protocol%20address%20length*/
+    arp_hdr.ar_hln = ETHER_ADDR_LEN = 8; /*from www.networksorcery.com/enp/protocol/arp.htm#Protocol%20address%20length*/
+    arp_hdr.ar_pln = 8;             /*from www.networksorcery.com/enp/protocol/arp.htm#Protocol%20address%20length*/
     sr_arp_opcode code = arp_op_request;
     arp_hdr.ar_op = code;              /* ARP opcode (command)         */
     memcpy(arp_hdr.ar_sha, o_interface->addr, ETHER_ADDR_LEN); /* sender hardware address      */
@@ -398,12 +398,12 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
             sr->cache->requests = sweepreq->next;
             sweepreq = sweepreq->next;
             nextreq = sweepreg->next;
-            sr_arpreq_destroy(prevreq);
+            sr_arpreq_destroy(&sr->cache, prevreq);
             prevreq = sweepreq;
           } else {
             nextreq = sweepreq->next;
             prevreq->next = nextreq;
-            sr_arpreq_destroy(sweepreq);
+            sr_arpreq_destroy(&sr->cache, sweepreq);
             sweepreq = nextreq;
           }
         } else {
