@@ -227,7 +227,7 @@ void send_host_unreachable(uint8_t* source_addr, uint8_t *packet, struct sr_inst
 void send_echo_reply(uint8_t* source_addr, uint8_t *packet, struct sr_instance *sr){
   
   /*Allocate a buffer to hold the packet*/
-  uint8_t *buf = malloc(sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t));
+  uint8_t *buf = malloc(sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t));
   
   /*Create and send the host unreachable ICMP TO source, telling them that dest was unreachable*/
   /*First have to create the ICMP packet*/
@@ -262,11 +262,12 @@ void send_echo_reply(uint8_t* source_addr, uint8_t *packet, struct sr_instance *
    memcpy((void *) ether_packet->ether_dhost, (void *) source_addr, ETHER_ADDR_LEN);/*Set ethernet destination*/
   memcpy((void *) ether_packet->ether_shost, (void *)sr->if_list[0].addr, ETHER_ADDR_LEN); /*Set ethernet source*/
   ether_packet->ether_type = ethertype_ip;
-  print_hdr_eth(ether_packet);
-  print_hdr_icmp(uint8_t *buf);
+  printf("ether header in send_echo_reply:\n");
+  print_hdr_eth((buf + sizeof(sr_ethernet_hdr_t)));
+  print_hdr_icmp(buf);
   /*Now send off the packet*/
-  int size = 32+20+8+28; /*Size of the packet. Ether header = 32, ip header = 20, ICMP header = 8, ICMP data = 28.*/
-  sr_send_packet(sr, buf, size, sr->if_list);
+  int size = sizeof(buf);
+  sr_send_packet(sr, buf, size, sr->if_list->name);
   
 
 }
@@ -277,7 +278,7 @@ void send_echo_reply(uint8_t* source_addr, uint8_t *packet, struct sr_instance *
 void send_times_up(uint8_t *source_addr, uint8_t *packet, struct sr_instance *sr){
   
   /*Allocate a buffer to hold the packet*/
-  uint8_t *buf = malloc(sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t));
+  uint8_t *buf = malloc(sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t));
   
   /*Create and send the host unreachable ICMP TO source, telling them that dest was unreachable*/
   /*First have to create the ICMP packet*/
@@ -285,8 +286,11 @@ void send_times_up(uint8_t *source_addr, uint8_t *packet, struct sr_instance *sr
   icmp_packet->icmp_type = 11;
   icmp_packet->icmp_code = 1;
   icmp_packet->icmp_sum = 0;
-  icmp_packet->icmp_sum = cksum((const void *)(icmp_packet.icmp_type + icmp_packet.icmp_code), 2);
-  print_hdr_icmp(icmp_packet);
+  /*http://stackoverflow.com/questions/15249791/combining-two-uint8-t-as-uint16-t for concatenating uint8_t*/
+  uint16_t type_and_code = ((uint16_t)icmp_packet->icmp_code << 8) | icmp_packet->icmp_type;
+  icmp_packet->icmp_sum = cksum((const void *)(&type_and_code), 16);
+  printf("icmp header in send_times_up:\n");
+  print_hdr_icmp((buf + sizeof(sr_ip_hdr_t) + sizeof(sr_ethernet_hdr_t)));
   /*Have to craft data.  Data will be the original packet header plus the first 8 bytes of the packet content.*/
   memcpy(icmp_packet->data, packet, ICMP_DATA_SIZE);
   
@@ -302,19 +306,20 @@ void send_times_up(uint8_t *source_addr, uint8_t *packet, struct sr_instance *sr
   ip_packet->ip_sum;            /* checksum */
   ip_packet->ip_src = sr->if_list[0]->ip;  /*Assign the packet source to one of the router's interfaces*/
   ip_packet->ip_dst = get_ip_addr(packet);  /*set the packet destination to the original source IP*/
-  print_hdr_ip(ip_packet);
+  printf("ip header in send_times_out:\n");
+  print_hdr_ip((buf + sizeof(sr_ethernet_hdr_t)));
   
   /*Now make an ethernet frame to wrap the IP packet with the ICMP packet*/
   sr_ethernet_hdr_t *ether_packet = (sr_ethernet_hdr_t *)(buf);
   memcpy((void *) ether_packet->ether_dhost, (void *) source_addr, ETHER_ADDR_LEN);/*Set ethernet destination*/
-  ether_packet->ether_shost = (uint8_t *)sr->if_list[0].addr;  /*Set ethernet source*/
+  memcpy((void *) ether_packet->ether_shost, (void *)sr->if_list[0].addr, ETHER_ADDR_LEN); /*Set ethernet source*/
   ether_packet->ether_type = ethertype_ip;
-  print_hdr_eth(ether_packet);
+  printf("ether header in send_echo_reply:\n");
+  print_hdr_eth((buf + sizeof(sr_ethernet_hdr_t)));
   /*Now send off the packet*/
-  int size = 32+20+8+28; /*Size of the packet. Ether header = 32, ip header = 20, ICMP header = 8, ICMP data = 28.*/
-  sr_send_packet(sr, buf, size, sr->if_list);
+  int size = sizeof(buf);
+  sr_send_packet(sr, buf, size, sr->if_list->name);
   
-
 }
 
 /* prepare arp into ethernet frame and send it */
@@ -325,10 +330,10 @@ int broadcast_arpreq(struct sr_instance *sr, struct sr_arpreq *arp_req){
     struct sr_arp_hdr arp_hdr;
     uint8_t *arp_package;
     uint8_t *e_pack;
-    arp_hdr.ar_hrd = arp_hrd_ethernet;             /* format of hardware address   */
-    arp_hdr.ar_pro = 0X800;            /*from www.networksorcery.com/enp/protocol/arp.htm#Protocol%20address%20length*/
-    arp_hdr.ar_hln = ETHER_ADDR_LEN = 8; /*from www.networksorcery.com/enp/protocol/arp.htm#Protocol%20address%20length*/
-    arp_hdr.ar_pln = 8;             /*from www.networksorcery.com/enp/protocol/arp.htm#Protocol%20address%20length*/
+    arp_hdr.ar_hrd = sr_arp_hrd_fmt hfmt = arp_hrd_ethernet;             /* format of hardware address   */
+    arp_hdr.ar_pro = 0X800;            /*from http:/*www.networksorcery.com/enp/protocol/arp.htm#Protocol%20address%20length*/
+    arp_hdr.ar_hln = ETHER_ADDR_LEN = 8; /*from http:/*www.networksorcery.com/enp/protocol/arp.htm#Protocol%20address%20length*/
+    arp_hdr.ar_pln = 8;             /*from http:/*www.networksorcery.com/enp/protocol/arp.htm#Protocol%20address%20length*/
     sr_arp_opcode code = arp_op_request;
     arp_hdr.ar_op = code;              /* ARP opcode (command)         */
     memcpy(arp_hdr.ar_sha, o_interface->addr, ETHER_ADDR_LEN); /* sender hardware address      */
@@ -398,12 +403,12 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
             sr->cache->requests = sweepreq->next;
             sweepreq = sweepreq->next;
             nextreq = sweepreg->next;
-            sr_arpreq_destroy(&sr->cache, prevreq);
+            sr_arpreq_destroy(prevreq);
             prevreq = sweepreq;
           } else {
             nextreq = sweepreq->next;
             prevreq->next = nextreq;
-            sr_arpreq_destroy(&sr->cache, sweepreq);
+            sr_arpreq_destroy(sweepreq);
             sweepreq = nextreq;
           }
         } else {
