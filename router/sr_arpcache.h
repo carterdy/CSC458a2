@@ -176,8 +176,11 @@ uint8_t* get_ether_source(struct sr_packet *packet);
 */
 void notify_sources_badreq(struct sr_instance *sr, struct sr_arpreq *arp_req);
 
+/* prepare arp into ethernet frame and send it */
+int broadcast_arpreq(struct sr_instance *sr, struct sr_arpreq *arp_req);
+
 /* Look through the routing table and see if there is any prefix matched */
-struct sr_rt rtable_look_up(struct sr_instance *sr, struct sr_arpreq *arp_req);
+int rtable_look_up(struct sr_instance *sr, struct sr_arpreq *arp_req);
 
 /*
   Send a host unreachable ICMP to the given source address
