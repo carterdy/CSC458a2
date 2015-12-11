@@ -176,16 +176,16 @@ struct sr_rt rtable_look_up(struct sr_instance *sr, struct sr_arpreq *arp_req);
 /*
   Send a host unreachable ICMP to the given source address
 */
-void send_host_unreachable(uint8_t source_addr, uint8_t *packet, struct sr_instance *sr);
+void send_host_unreachable(uint8_t* source_addr, uint8_t *packet, struct sr_instance *sr);
 
 /*
   Send a timeout ICMP message to the given source address
 */
-void send_times_up(uint8_t source_addr, uint8_t *packet, struct sr_instance *sr);
+void send_times_up(uint8_t* source_addr, uint8_t *packet, struct sr_instance *sr);
 
 /*
   Send an echo reply to the given source address
 */
-void send_echo_reply(uint8_t source_addr, uint8_t *packet, struct sr_instance *sr);
+void send_echo_reply(uint8_t* source_addr, uint8_t *packet, struct sr_instance *sr);
 
 #endif
