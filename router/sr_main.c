@@ -7,7 +7,7 @@
  * Based on many generations of sr clients including the original c client
  * and bert.
  *
- * Description:
+ * Description: 
  *
  * Driver file for sr
  *

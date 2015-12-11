@@ -4,7 +4,7 @@
  * Authors: Guido Apanzeller, Vikram Vijayaraghaven, Martin Casado
  * Contact: casado@stanford.edu
  *
- * Based on many generations of sr clients including the original c client
+ * Based on many generations of sr clients including the original c client 
  * and bert.
  *
  * 2003-Dec-03 09:00:52 AM :

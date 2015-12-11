@@ -6,28 +6,30 @@
 #include <pthread.h>
 #include <sched.h>
 #include <string.h>
+#include <stdbool.h>
 #include "sr_arpcache.h"
 #include "sr_router.h"
 #include "sr_if.h"
 #include "sr_protocol.h"
+#include "sr_utils.h"
 
 
-/*all icmp type obtained from http:/*www.nthelp.com/icmp.html
+/*all icmp type obtained from http://www.nthelp.com/icmp.html*/
 #define ICMP_DESTINATION_UNREACHABLE 3
-#define ICMP_TIME_EXCEED 11
-/*Dynamic array implimentation from http:/*stackoverflow.com/questions/3536153/c-dynamically-growing-array
+#define ICMP_TIME_EXCEED 11 
+/*Dynamic array implimentation from http://stackoverflow.com/questions/3536153/c-dynamically-growing-array
 */
 
 void initArray(Array *a, size_t initialSize) {
-  a->array = (uint8_t *)malloc(initialSize * sizeof(uint8_t));
+  a->array = (unsigned long long *)malloc(initialSize * sizeof(unsigned long long));
   a->used = 0;
   a->size = initialSize;
 }
 
-void insertArray(Array *a, uint8_t element) {
+void insertArray(Array *a, unsigned long long element) {
   if (a->used == a->size) {
     a->size *= 2;
-    a->array = (uint8_t *)realloc(a->array, a->size * sizeof(uint8_t));
+    a->array = (unsigned long long *)realloc(a->array, a->size * sizeof(unsigned long long));
   }
   a->array[a->used++] = element;
 }
@@ -41,7 +43,7 @@ void freeArray(Array *a) {
 /*
   Check to see if the given Array a contains element. Return true if it does, and false if not
 */
-bool array_contains(Array a, uint8_t element){
+bool array_contains(Array a, unsigned long long element){
   int i;
   for (i = 0; i < a.used; i++){
     if (a.array[i] == element){
@@ -59,7 +61,7 @@ int handle_arpreq(struct sr_instance *sr, struct sr_arpreq *arp_req){
   /*if it tried 5 times... destination is unreachable*/
   if (arp_req->times_sent >5){
     /*Go through each packet and for each unique source, send ICMP to say host unreachable*/
-    notify_sources_badreq(arp_req);
+    notify_sources_badreq(sr, arp_req);
 
 
   }else{
@@ -68,7 +70,7 @@ int handle_arpreq(struct sr_instance *sr, struct sr_arpreq *arp_req){
         /* incrememnt times_sent*/
         arp_req->times_sent++;
         /*Broadcast ARP request*/
-        boardcast_arpreq(arp_req);
+        broadcast_arpreq(arp_req);
     }else{
         notify_sources_badreq(arp_req);
 
@@ -106,14 +108,8 @@ struct sr_rt rtable_look_up(struct sr_instance *sr, struct sr_arpreq *arp_req){
 */
 uint8_t get_ether_source(struct sr_packet *packet){
   
-  uint8_t *frame = packet->buf;
-  /*First 6 bytes of frame = dest, second 6 bytes = source*/
-  uint8_t *source = (uint8_t *)malloc(sizeof(uint8_t));
-  int i;
-  for (i = 6; i < 12; i++){
-    source[i] = frame[i];
-  }
-  return &source;
+  sr_ethernet_hdr_t *ether_hdr = (sr_ethernet_hdr_t *)(packet->buf);
+  return ether_hdr->ether_shost;
 }
 
 
@@ -126,13 +122,14 @@ void notify_sources_badreq(struct sr_instance *sr, struct sr_arpreq *arp_req){
   /*Go through each packet and for each unique source, send TCMP to say host unreachable*/
     struct sr_packet *packet = arp_req->packets;
     Array sources;
-    initArray(&a, 1);
+    initArray(&sources, 1);
     while (packet){
-        uint8_t source[ETHER_ADDR_LEN] = get_ether_source(packet);
+        uint8_t source[ETHER_ADDR_LEN];
+        memcpy(source, get_ether_source(packet), ETHER_ADDR_LEN);
         /*Check to make sure we haven't sent to this source yet*/
-        if (!array_contains(sources, source)){
-          send_host_runreachable(source, packet->buf);
-          insertArray(&sources, source);
+        if (!array_contains(sources, *((unsigned long long)source))){
+          send_host_unreachable(source, packet->buf);
+          insertArray(&sources, *((unsigned long long)source)));
         }
         free(&source);
         packet = packet->next;
@@ -140,19 +137,18 @@ void notify_sources_badreq(struct sr_instance *sr, struct sr_arpreq *arp_req){
     freeArray(&sources);
 }
 
-/*  Extract and return the ip address from the IP header encapsulated by the given ethernet packet.  */
+/*  Extract and return the SOURCE ip address from the IP header encapsulated by the given ethernet packet.  */
 uint32_t get_ip_addr(uint8_t *packet){
-  /*We know that the ethernet header is 32 bytes long, and the source address in the IP header is at the 12th octet*/
-  uint32_t address;
-  address = (uint32_t)(packet->buf[32+12*8]);
-  return address;
+  
+  sr_ip_hdr_t* ip_hdr = (sr_ip_hdr_t *)(packet->buf+sizeof(sr_ethernet_hdr_t))
+  return ip_hdr->ip_src;
 
 }
 
 /*
   Send a host unreachable ICMP to the given source address
 */
-void send_host_unreachable(uint8_t source_addr, uint8_t *packet, struct sr_instance *sr){
+void send_host_unreachable(uint8_t* source_addr, uint8_t *packet, struct sr_instance *sr){
   
   /*Allocate a buffer to hold the packet*/
   uint8_t *buf = malloc(sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t));
@@ -163,7 +159,7 @@ void send_host_unreachable(uint8_t source_addr, uint8_t *packet, struct sr_insta
   icmp_packet->icmp_type = 3;
   icmp_packet->icmp_code = 1;
   icmp_packet->icmp_sum = 0;
-  icmp_packet->icmp_sum = cksum((const void *)(icmp_packet.icmp_type + icmp_packet.icmp_code), 2);
+  icmp_packet->icmp_sum = cksum((const void *)(icmp_packet->icmp_type + icmp_packet->icmp_code), 2);
   print_hdr_icmp(icmp_packet);
   /*Have to craft data.  Data will be the original packet header plus the first 8 bytes of the packet content.*/
   memcpy(icmp_packet->data, packet, ICMP_DATA_SIZE);
@@ -178,20 +174,20 @@ void send_host_unreachable(uint8_t source_addr, uint8_t *packet, struct sr_insta
   ip_packet->ip_ttl;			/* time to live */
   ip_packet->ip_p = 1;			/* protocol */
   ip_packet->ip_sum;			/* checksum */
-  ip_packet->ip_src = sr->if_list[0]->ip;  /*Assign the packet source to one of the router's interfaces*/
+  ip_packet->ip_src = sr->if_list[0].ip;  /*Assign the packet source to one of the router's interfaces*/
   ip_packet->ip_dst = get_ip_addr(packet);	/*set the packet destination to the original source IP*/
   print_hdr_ip(ip_packet);
   
   /*Now make an ethernet frame to wrap the IP packet with the ICMP packet*/
   sr_ethernet_hdr_t *ether_packet = (sr_ethernet_hdr_t *)(buf);
-  ether_packet->ether_dhost = source_addr;  /*Set ethernet destination*/
-  ether_packet->ether_shost = sr->if_list[0]->addr;  /*Set ethernet source*/
+  memcpy((void *) ether_packet->ether_dhost, (void *) source_eth, ETHER_ADDR_LEN);/*Set ethernet destination*/
+  ether_packet->ether_shost = sr->if_list[0].addr;  /*Set ethernet source*/
   ether_packet->ether_type = sr_ethertype.ethertype_ip;
   print_hdr_eth(ether_packet);
   
   /*Now send off the packet*/
   int size = 32+20+8+28; /*Size of the packet. Ether header = 32, ip header = 20, ICMP header = 8, ICMP data = 28.*/
-  sr_send_packet(sr, buf, size, sr->if_list);
+  sr_send_packet(sr, buf, size, sr->if_list->name);
   
 
 }

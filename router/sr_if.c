@@ -6,7 +6,7 @@
  * Description:
  *
  * Data structures and methods for handling interfaces
- *
+ * 
  *---------------------------------------------------------------------------*/
 
 #include <stdio.h>

@@ -1,7 +1,7 @@
 /*
  *  sha1.c
  *
- *  Copyright (C) 1998, 2009
+ *  Copyright (C) 1998, 2009 
  *  Paul E. Jones <paulej@packetizer.com>
  *  All Rights Reserved
  *

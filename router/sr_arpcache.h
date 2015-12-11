@@ -12,7 +12,7 @@
        free entry
    else:
        req = arpcache_queuereq(next_hop_ip, packet, len)
-       handle_arpreq(req)
+       handle_arpreq(req) 
    --
    The handle_arpreq() function is a function you should write, and it should
    handle sending ARP requests if necessary:
@@ -54,6 +54,7 @@
 #include <inttypes.h>
 #include <time.h>
 #include <pthread.h>
+#include <stdbool.h>
 #include "sr_if.h"
 
 #define SR_ARPCACHE_SZ    100  
@@ -144,10 +145,16 @@ typedef struct {
 void initArray(Array *a, size_t initialSize);
 
 /* Insert an element to the array and increase the array's size*/
-void insertArray(Array *a, uint8_t element);
+void insertArray(Array *a, unsigned long long element);
 
 /* Free the array from memory */
 void freeArray(Array *a);
+
+
+/*
+  Check to see if the given Array a contains element. Return true if it does, and false if not
+*/
+bool array_contains(Array a, unsigned long long element);
 
 /*  Other functions we've added */
 
@@ -156,6 +163,15 @@ uint32_t get_ip_addr(uint8_t *packet);
 
 /*  Extract and return the ethernet address from the given ethernet packet.  */
 uint32_t get_ether_addr(struct sr_packet *packet);
+
+/*
+  Go through each unique source of the packets waiting on arp_req
+  and send a ICMP host unreachable message.
+*/
+void notify_sources_badreq(struct sr_instance *sr, struct sr_arpreq *arp_req);
+
+/* Look through the routing table and see if there is any prefix matched */
+struct sr_rt rtable_look_up(struct sr_instance *sr, struct sr_arpreq *arp_req);
 
 /*
   Send a host unreachable ICMP to the given source address

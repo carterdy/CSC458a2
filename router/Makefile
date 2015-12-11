@@ -1,6 +1,6 @@
 #------------------------------------------------------------------------------
 # File: Makefile
-# 
+#  
 # Note: This Makefile requires GNU make.
 # 
 # (c) 2001,2000 Stanford University

@@ -3,7 +3,7 @@
  *
  *  Copyright (C) 1998, 2009
  *  Paul E. Jones <paulej@packetizer.com>
- *  All Rights Reserved
+ *  All Rights Reserved 
  *
  *****************************************************************************
  *  $Id: sha1.h 12 2009-06-22 19:34:25Z paulej $
