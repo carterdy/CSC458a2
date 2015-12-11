@@ -197,4 +197,7 @@ void send_times_up(uint8_t* source_addr, uint8_t *packet, struct sr_instance *sr
 */
 void send_echo_reply(uint8_t* source_addr, uint8_t *packet, struct sr_instance *sr);
 
+/* build the ethernet frame to be broadcast */
+uint8_t * eth_hdr_package(uint8_t  ether_dhost, uint8_t  ether_shost, uint16_t ether_type, uint8_t *content, int len);
+
 #endif
