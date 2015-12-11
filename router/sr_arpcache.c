@@ -322,6 +322,25 @@ void send_times_up(uint8_t *source_addr, uint8_t *packet, struct sr_instance *sr
   sr_send_packet(sr, buf, size, sr->if_list->name);
   
 }
+/* build the ethernet frame to be broadcast */
+uint8_t * eth_hdr_package(uint8_t ether_dhost, uint8_t  ether_shost, uint16_t ether_type, uint8_t *content, int len){
+    uint8_t *output;
+    int total_length;
+    struct sr_ethernet_hdr e_hdr;
+    /*first step is to create a ethernet header...*/
+    memcpy((void *)e_hdr.ether_dhost, (void *)(&ether_dhost), ETHER_ADDR_LEN); /* destination ethernet address */
+    memcpy((void *)e_hdr.ether_shost, (void *)(&ether_shost),ETHER_ADDR_LEN); /* source ethernet address */
+    e_hdr.ether_type = ether_type;
+    /*calculate the length of the entire thing...*/
+    total_length = sizeof(sr_ethernet_hdr_t) + len;
+    /*put everything together*/
+    output = malloc(total_length);
+    /*put the ethernet header in the front*/
+    memcpy(output, &e_hdr, sizeof(sr_ethernet_hdr_t));
+    memcpy(output + sizeof(sr_ethernet_hdr_t), content,len);
+    return output;
+    
+}
 
 /* prepare arp into ethernet frame and send it */
 void broadcast_arpreq(struct sr_instance *sr, struct sr_arpreq *arp_req){
@@ -351,25 +370,7 @@ void broadcast_arpreq(struct sr_instance *sr, struct sr_arpreq *arp_req){
 }
 
 
-/* build the ethernet frame to be broadcast */
-uint8_t * eth_hdr_package(uint8_t  ether_dhost, uint8_t  ether_shost, uint16_t ether_type, uint8_t *content, int len){
-    uint8_t *output;
-    int total_length;
-    struct sr_ethernet_hdr e_hdr;
-    /*first step is to create a ethernet header...*/
-    memcpy((void *)e_hdr.ether_dhost, (void *)(&ether_dhost), ETHER_ADDR_LEN); /* destination ethernet address */
-    memcpy((void *)e_hdr.ether_shost, (void *)(&ether_shost),ETHER_ADDR_LEN); /* source ethernet address */
-    e_hdr.ether_type = ether_type;
-    /*calculate the length of the entire thing...*/
-    total_length = sizeof(sr_ethernet_hdr_t) + len;
-    /*put everything together*/
-    output = malloc(total_length);
-    /*put the ethernet header in the front*/
-    memcpy(output, &e_hdr, sizeof(sr_ethernet_hdr_t));
-    memcpy(output + sizeof(sr_ethernet_hdr_t), content,len);
-    return output;
-    
-}
+
 /* 
   This function gets called every second. For each request sent out, we keep
   checking whether we should resend an request or destroy the arp request.
