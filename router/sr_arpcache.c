@@ -95,6 +95,7 @@ bool equals(uint8_t* first, uint8_t* second){
     if (first[i] != second[i]){
       return false;
     }
+  }
   return true;
 }
 
@@ -323,7 +324,7 @@ void send_times_up(uint8_t *source_addr, uint8_t *packet, struct sr_instance *sr
 }
 
 /* prepare arp into ethernet frame and send it */
-int broadcast_arpreq(struct sr_instance *sr, struct sr_arpreq *arp_req){
+void broadcast_arpreq(struct sr_instance *sr, struct sr_arpreq *arp_req){
     struct sr_if *o_interface;
     /*first package the arp package header first...*/
     o_interface = sr_get_interface(sr, arp_req->packets->iface);
@@ -336,18 +337,16 @@ int broadcast_arpreq(struct sr_instance *sr, struct sr_arpreq *arp_req){
     arp_hdr.ar_pln = 8;             /*from http://www.networksorcery.com/enp/protocol/arp.htm#Protocol%20address%20length*/
     arp_hdr.ar_op = arp_op_request;              /* ARP opcode (command)         */
     memcpy(arp_hdr.ar_sha, o_interface->addr, ETHER_ADDR_LEN); /* sender hardware address      */
-    arp_hdr.ar_sip = o_interface.ip;             /* sender IP address            */
-    arp_hdr.ar_tip = arp_req.ip;                 /* target IP address            */
+    arp_hdr.ar_sip = o_interface->ip;             /* sender IP address            */
+    arp_hdr.ar_tip = arp_req->ip;                 /* target IP address            */
     /*copy everything into the arp_header*/
     arp_package = malloc(sizeof(sr_arp_hdr_t));
-    print_hdr_arp(arp_package);
     memcpy(arp_package, &arp_hdr, sizeof(sr_arp_hdr_t));
     /*then package the ethernet header along with the arp header...*/
-    e_pack = eth_hdr_package(uint8_t  ether_dhost, sr, o_interface->addr, arp_package, sizeof(struct sr_arp_hdr));
-    print_hdr_eth(e_pack);
+    e_pack = eth_hdr_package((uint8_t *)(&(0xffffffffffff)), sr, o_interface->addr, arp_package, sizeof(struct sr_arp_hdr));
 
     /*send it out*/
-    sr_send_packet(sr, e_pack, sizeof(struct sr_arp_hdr) + sizeof(struct sr_ethernet_hdr), o_interface);
+    sr_send_packet(sr, e_pack, sizeof(struct sr_arp_hdr) + sizeof(struct sr_ethernet_hdr), o_interface->name);
 }
 
 
@@ -385,7 +384,7 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
           /*else(req not brand new but <5 re-sends) : send arprequest again, update time last send and sent count*/
 
     struct sr_arpreq *sweepreq;
-    struct sr_arpreq *prevreq = sr->cache->requests;
+    struct sr_arpreq *prevreq = sr->cache.requests;
     struct sr_nextreq *nextreq;
     /*There are no requests!*/
     if (prevreq == NULL){
@@ -395,13 +394,13 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
     sweepreq = prevreq;
     /*There are still request left*/
     while (sweepreq != NULL){
-        if (handle_arpreq(sweepreq) == 1){
+        if (handle_arpreq(sr, sweepreq) == 1){
           /*request has been sent too many times. Destroy without losing the request queue. Have to point the previous req to the next req*/
           if (prevreq == sweepreq){
             /*Handle the case of the first request*/
             sr->cache->requests = sweepreq->next;
             sweepreq = sweepreq->next;
-            nextreq = sweepreg->next;
+            nextreq = sweepreq->next;
             sr_arpreq_destroy(prevreq);
             prevreq = sweepreq;
           } else {
@@ -415,6 +414,7 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
           prevreq = sweepreq;
           sweepreq = sweepreq->next;
         }
+    }
 }
 
 

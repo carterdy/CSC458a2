@@ -177,7 +177,7 @@ uint8_t* get_ether_source(struct sr_packet *packet);
 void notify_sources_badreq(struct sr_instance *sr, struct sr_arpreq *arp_req);
 
 /* prepare arp into ethernet frame and send it */
-int broadcast_arpreq(struct sr_instance *sr, struct sr_arpreq *arp_req);
+void broadcast_arpreq(struct sr_instance *sr, struct sr_arpreq *arp_req);
 
 /* Look through the routing table and see if there is any prefix matched */
 int rtable_look_up(struct sr_instance *sr, struct sr_arpreq *arp_req);
@@ -199,5 +199,11 @@ void send_echo_reply(uint8_t* source_addr, uint8_t *packet, struct sr_instance *
 
 /* build the ethernet frame to be broadcast */
 uint8_t * eth_hdr_package(uint8_t  ether_dhost, uint8_t  ether_shost, uint16_t ether_type, uint8_t *content, int len);
+
+/*
+  Handle the given arpreq.  Re-send the request if need be and alert packet sources waiting on the req if the request is bad.
+  Return 0 if the arpreq has been handled or return 1 if the arpreq needs to be destroyed
+*/
+int handle_arpreq(struct sr_instance *sr, struct sr_arpreq *arp_req);
 
 #endif
