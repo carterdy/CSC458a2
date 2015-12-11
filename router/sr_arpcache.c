@@ -22,15 +22,15 @@
 */
 
 void initArray(Array *a, size_t initialSize) {
-  a->array = (unsigned long long *)malloc(initialSize * sizeof(unsigned long long));
+  a->array = (uint8_t**)malloc(initialSize * sizeof(uint8_t*));
   a->used = 0;
   a->size = initialSize;
 }
 
-void insertArray(Array *a, unsigned long long element) {
+void insertArray(Array *a, uint8_t *element) {
   if (a->used == a->size) {
     a->size *= 2;
-    a->array = (unsigned long long *)realloc(a->array, a->size * sizeof(unsigned long long));
+    a->array = (uint8_t **)realloc(a->array, a->size * sizeof(uint8_t*));
   }
   a->array[a->used++] = element;
 }
@@ -44,10 +44,10 @@ void freeArray(Array *a) {
 /*
   Check to see if the given Array a contains element. Return true if it does, and false if not
 */
-bool array_contains(Array a, unsigned long long element){
+bool array_contains(Array a, uint8_t *element){
   int i;
   for (i = 0; i < a.used; i++){
-    if (a.array[i] == element){
+    if (equals(a.array[i], element)){
       return true;
     }
   }
@@ -86,6 +86,19 @@ int rtable_look_up(struct sr_instance *sr, struct sr_arpreq *arp_req){
     }
 
 /*
+* Return true if ethernet address first is equal to ethernet address second. Otherwise return false.
+*/
+bool equals(uint8_t* first, uint8_t* second){
+
+  int i;
+  for (i = 0; i < 6; i++){
+    if (first[i] != second[i]){
+      return false;
+    }
+  return true;
+}
+
+/*
   Handle the given arpreq.  Re-send the request if need be and alert packet sources waiting on the req if the request is bad.
   Return 0 if the arpreq has been handled or return 1 if the arpreq needs to be destroyed
 */
@@ -104,7 +117,7 @@ int handle_arpreq(struct sr_instance *sr, struct sr_arpreq *arp_req){
         /*Broadcast ARP request*/
         broadcast_arpreq(arp_req);
     }else{
-        notify_sources_badreq(arp_req);
+        notify_sources_badreq(sr, arp_req);
 
     }
 
@@ -116,7 +129,7 @@ int handle_arpreq(struct sr_instance *sr, struct sr_arpreq *arp_req){
 /*
   Return the source address of the given ethernet packet
 */
-uint8_t get_ether_source(struct sr_packet *packet){
+uint8_t* get_ether_source(struct sr_packet *packet){
   
   sr_ethernet_hdr_t *ether_hdr = (sr_ethernet_hdr_t *)(packet->buf);
   return ether_hdr->ether_shost;
@@ -135,11 +148,11 @@ void notify_sources_badreq(struct sr_instance *sr, struct sr_arpreq *arp_req){
     initArray(&sources, 1);
     while (packet){
         uint8_t source[ETHER_ADDR_LEN];
-        memcpy(source, get_ether_source(packet), ETHER_ADDR_LEN);
+        memcpy((void *)source, (void *)get_ether_source(packet), ETHER_ADDR_LEN);
         /*Check to make sure we haven't sent to this source yet*/
-        if (!array_contains(sources, *((unsigned long long)source))){
-          send_host_unreachable(source, packet->buf);
-          insertArray(&sources, *((unsigned long long)source)));
+        if (!array_contains(sources, source)){
+          send_host_unreachable(source, packet->buf, sr);
+          insertArray(&sources, source));
         }
         free(&source);
         packet = packet->next;
@@ -150,7 +163,7 @@ void notify_sources_badreq(struct sr_instance *sr, struct sr_arpreq *arp_req){
 /*  Extract and return the SOURCE ip address from the IP header encapsulated by the given ethernet packet.  */
 uint32_t get_ip_addr(uint8_t *packet){
   
-  sr_ip_hdr_t* ip_hdr = (sr_ip_hdr_t *)(packet->buf+sizeof(sr_ethernet_hdr_t))
+  sr_ip_hdr_t* ip_hdr = (sr_ip_hdr_t *)(packet+sizeof(sr_ethernet_hdr_t));
   return ip_hdr->ip_src;
 
 }
@@ -190,9 +203,9 @@ void send_host_unreachable(uint8_t* source_addr, uint8_t *packet, struct sr_inst
   
   /*Now make an ethernet frame to wrap the IP packet with the ICMP packet*/
   sr_ethernet_hdr_t *ether_packet = (sr_ethernet_hdr_t *)(buf);
-  memcpy((void *) ether_packet->ether_dhost, (void *) source_eth, ETHER_ADDR_LEN);/*Set ethernet destination*/
-  ether_packet->ether_shost = sr->if_list[0].addr;  /*Set ethernet source*/
-  ether_packet->ether_type = sr_ethertype.ethertype_ip;
+  memcpy((void *) ether_packet->ether_dhost, (void *) source_addr, ETHER_ADDR_LEN);/*Set ethernet destination*/
+  ether_packet->ether_shost = (uint8_t *)sr->if_list[0].addr;  /*Set ethernet source*/
+  ether_packet->ether_type = ethertype_ip;
   print_hdr_eth(ether_packet);
   
   /*Now send off the packet*/
@@ -206,18 +219,18 @@ void send_host_unreachable(uint8_t* source_addr, uint8_t *packet, struct sr_inst
 /*
   Send a host unreachable ICMP to the given source address
 */
-void send_echo_reply(uint8_t source_addr, uint8_t *packet, struct sr_instance *sr){
+void send_echo_reply(uint8_t* source_addr, uint8_t *packet, struct sr_instance *sr){
   
   /*Allocate a buffer to hold the packet*/
   uint8_t *buf = malloc(sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t));
   
   /*Create and send the host unreachable ICMP TO source, telling them that dest was unreachable*/
   /*First have to create the ICMP packet*/
-  sr_icmp_t3_hdr_t *icmp_packet = (sr_icmp_hdr_t *)(buf + sizeof(sr_ip_hdr_t) + sizeof(sr_ethernet_hdr_t));
+  sr_icmp_t3_hdr_t *icmp_packet = (sr_icmp_t3_hdr_t *)(buf + sizeof(sr_ip_hdr_t) + sizeof(sr_ethernet_hdr_t));
   icmp_packet->icmp_type = 1;
   icmp_packet->icmp_code = 1;
   icmp_packet->icmp_sum = 0;
-  icmp_packet->icmp_sum = cksum((const void *)(icmp_packet.icmp_type + icmp_packet.icmp_code), 2);
+  icmp_packet->icmp_sum = cksum((const void *)(icmp_packet->icmp_type + icmp_packet->icmp_code), 2);
   print_hdr_icmp(icmp_packet);
   /*Have to craft data.  Data will be the original packet header plus the first 8 bytes of the packet content.*/
   memcpy(icmp_packet->data, packet, ICMP_DATA_SIZE);
@@ -232,14 +245,13 @@ void send_echo_reply(uint8_t source_addr, uint8_t *packet, struct sr_instance *s
   ip_packet->ip_ttl;            /* time to live */
   ip_packet->ip_p = 1;          /* protocol */
   ip_packet->ip_sum;            /* checksum */
-  ip_packet->ip_src = sr->if_list[0]->ip;  /*Assign the packet source to one of the router's interfaces*/
+  ip_packet->ip_src = sr->if_list[0].ip;  /*Assign the packet source to one of the router's interfaces*/
   ip_packet->ip_dst = get_ip_addr(packet);  /*set the packet destination to the original source IP*/
   print_hdr_ip(ip_packet);
-  memcpy((void *)arp_packet->ar_sha, (void *)sender_eth, ETHER_ADDR_LEN);
   /*Now make an ethernet frame to wrap the IP packet with the ICMP packet*/
   sr_ethernet_hdr_t *ether_packet = (sr_ethernet_hdr_t *)(buf);
-  ether_packet->ether_dhost = source_addr;  /*Set ethernet destination*/
-  ether_packet->ether_shost = sr->if_list[0]->addr;  /*Set ethernet source*/
+   memcpy((void *) ether_packet->ether_dhost, (void *) source_addr, ETHER_ADDR_LEN);/*Set ethernet destination*/
+  ether_packet->ether_shost = (uint8_t *)sr->if_list[0].addr;  /*Set ethernet source*/
   ether_packet->ether_type = sr_ethertype.ethertype_ip;
   print_hdr_eth(ether_packet);
   print_hdr_icmp(uint8_t *buf);
@@ -253,7 +265,7 @@ void send_echo_reply(uint8_t source_addr, uint8_t *packet, struct sr_instance *s
 /*
   Send a timeout ICMP message to the given source address
 */
-void send_times_up(uint8_t source_addr, uint8_t *packet, struct sr_instance *sr){
+void send_times_up(uint8_t *source_addr, uint8_t *packet, struct sr_instance *sr){
   
   /*Allocate a buffer to hold the packet*/
   uint8_t *buf = malloc(sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_hdr_t));
@@ -285,8 +297,8 @@ void send_times_up(uint8_t source_addr, uint8_t *packet, struct sr_instance *sr)
   
   /*Now make an ethernet frame to wrap the IP packet with the ICMP packet*/
   sr_ethernet_hdr_t *ether_packet = (sr_ethernet_hdr_t *)(buf);
-  ether_packet->ether_dhost = source_addr;  /*Set ethernet destination*/
-  ether_packet->ether_shost = sr->if_list[0]->addr;  /*Set ethernet source*/
+  memcpy((void *) ether_packet->ether_dhost, (void *) source_addr, ETHER_ADDR_LEN);/*Set ethernet destination*/
+  ether_packet->ether_shost = (uint8_t *)sr->if_list[0].addr;  /*Set ethernet source*/
   ether_packet->ether_type = sr_ethertype.ethertype_ip;
   print_hdr_eth(ether_packet);
   /*Now send off the packet*/
@@ -297,7 +309,7 @@ void send_times_up(uint8_t source_addr, uint8_t *packet, struct sr_instance *sr)
 }
 
 /* prepare arp into ethernet frame and send it */
-int boardcast_arpreq(struct sr_instance *sr, struct sr_arpreq *arp_req){
+int broadcast_arpreq(struct sr_instance *sr, struct sr_arpreq *arp_req){
     struct sr_if *o_interface;
     /*first package the arp package header first...*/
     o_interface = sr_get_interface(sr, arp_req->packets->iface);
