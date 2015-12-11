@@ -12,6 +12,7 @@
 #include "sr_if.h"
 #include "sr_protocol.h"
 #include "sr_utils.h"
+#include "sr_rt.h"
 
 
 /*all icmp type obtained from http://www.nthelp.com/icmp.html*/
@@ -53,6 +54,37 @@ bool array_contains(Array a, unsigned long long element){
   return false;
 }
 
+/*convert ip into in_addr */
+struct in_addr ip_in_addr(uint32_t ip){
+  struct in_addr inaddr;  
+  inaddr.s_addr = ip;
+  return inaddr;
+ 
+}
+
+
+
+/* Look through the routing table and see if there is any prefix matched */
+int rtable_look_up(struct sr_instance *sr, struct sr_arpreq *arp_req){
+    struct sr_rt* cur;
+    int matched;
+    int longest = 0;
+    cur = sr->routing_table;
+    matched = 0;
+    while (cur){
+        if ((cur->dest.s_addr & cur->mask.s_addr) == (ip_in_addr(arp_req->ip).s_addr & cur->mask.s_addr)) {
+            if (longest <= cur->mask.s_addr) {
+                matched = 1;
+                longest = cur->mask.s_addr;
+
+            }
+        }
+            cur = cur->next;
+        }
+    return matched;
+
+    }
+
 /*
   Handle the given arpreq.  Re-send the request if need be and alert packet sources waiting on the req if the request is bad.
   Return 0 if the arpreq has been handled or return 1 if the arpreq needs to be destroyed
@@ -80,28 +112,6 @@ int handle_arpreq(struct sr_instance *sr, struct sr_arpreq *arp_req){
   return 1;
 }
 
-
-/* Look through the routing table and see if there is any prefix matched */
-struct sr_rt rtable_look_up(struct sr_instance *sr, struct sr_arpreq *arp_req){
-    struct sr_rt* cur;
-    struct sr_rt* matched;
-    int longest = 0;
-    cur = sr->routing_table;
-    matched = 0;
-    longest = 0;
-    while (cur){
-        if ((cur->dest.s_addr & cur->mask.s_addr) == (arp_req.ip & cur->mask.s_addr)) {
-            if (longest <= cur->mask.s_addr) {
-                matched = cur;
-                longest <= cur->mask.s_addr;
-
-            }
-        }
-            cur = cur->next;
-        }
-    return matched;
-
-    }
 
 /*
   Return the source address of the given ethernet packet
