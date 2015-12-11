@@ -402,11 +402,7 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
             sr->cache.requests = sweepreq->next;
             sweepreq = sweepreq->next;
             nextreq = sweepreq->next;
-<<<<<<< HEAD
-            sr_arpreq_destroy(prevreq);
-=======
-            sr_arpreq_destroy(sr, prevreq);
->>>>>>> cbcf7a94cab395ab6606cac3643003817fe3cc70
+            sr_arpreq_destroy(sr->cache, prevreq);
             prevreq = sweepreq;
           } else {
             nextreq = sweepreq->next;
